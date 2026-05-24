@@ -77,7 +77,8 @@ export default function OnboardingPage() {
   };
 
   const handleSubmit = async () => {
-    if (!user || !workspaceName || !workspaceSlug) return;
+    if (!user || !workspaceName) return;
+    const finalSlug = workspaceSlug || workspaceName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || 'workspace';
 
     try {
       setLoading(true);
@@ -99,7 +100,7 @@ export default function OnboardingPage() {
       const { data: existingWorkspace } = await supabase
         .from('workspaces')
         .select('id')
-        .eq('workspace_slug', workspaceSlug)
+        .eq('workspace_slug', finalSlug)
         .maybeSingle();
 
       if (existingWorkspace) {
@@ -114,7 +115,7 @@ export default function OnboardingPage() {
         .insert({
           owner_id: user.id,
           workspace_name: workspaceName,
-          workspace_slug: workspaceSlug,
+          workspace_slug: finalSlug,
         })
         .select()
         .single();
@@ -402,7 +403,7 @@ export default function OnboardingPage() {
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={loading || !workspaceName || !workspaceSlug}
+                  disabled={loading || !workspaceName}
                   className="btn-primary flex-1 text-xs font-semibold py-3 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {loading ? 'Deploying Setup...' : 'Finalize & Launch'}
