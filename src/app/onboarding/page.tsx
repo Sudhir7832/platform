@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Zap, ArrowRight, ArrowLeft, Sparkles, Check, Globe, HelpCircle, Users2 } from 'lucide-react';
+import { Zap, ArrowRight, ArrowLeft, Sparkles, Globe, HelpCircle, Users2 } from 'lucide-react';
 import { platformColors, platformNames } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -26,10 +26,6 @@ export default function OnboardingPage() {
 
   // Form states
   const [fullName, setFullName] = useState('');
-  const [username, setUsername] = useState('');
-  const [usernameValid, setUsernameValid] = useState<boolean | null>(null);
-  const [usernameChecking, setUsernameChecking] = useState(false);
-  const [usernameErrorText, setUsernameErrorText] = useState<string | null>(null);
 
   const [creatorType, setCreatorType] = useState('personal');
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
@@ -48,62 +44,7 @@ export default function OnboardingPage() {
     }
   }, [user]);
 
-  // Username uniqueness check (debounced)
-  useEffect(() => {
-    if (!username) {
-      setUsernameValid(null);
-      setUsernameErrorText(null);
-      return;
-    }
 
-    if (username.length < 3) {
-      setUsernameValid(false);
-      setUsernameErrorText('Too short (min 3 characters)');
-      return;
-    }
-
-    if (username.length > 50) {
-      setUsernameValid(false);
-      setUsernameErrorText('Too long (max 50 characters)');
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setUsernameChecking(true);
-      try {
-        const { data, error: queryError } = await supabase
-          .from('users')
-          .select('username')
-          .eq('username', username.toLowerCase())
-          .maybeSingle();
-
-        if (queryError) {
-          console.warn('Database username check returned error:', queryError);
-          // If the table is missing or RLS is blocking, treat as valid to not block onboarding
-          setUsernameValid(true);
-          setUsernameErrorText(null);
-          return;
-        }
-
-        // Safe check: only invalid if we actually got a matching user row
-        if (data && data.username && data.username.toLowerCase() === username.toLowerCase()) {
-          setUsernameValid(false);
-          setUsernameErrorText('Username is already taken');
-        } else {
-          setUsernameValid(true);
-          setUsernameErrorText(null);
-        }
-      } catch (err) {
-        console.warn('Database username check failed, falling back to local validation:', err);
-        setUsernameValid(true); // Fallback to allow progress
-        setUsernameErrorText(null);
-      } finally {
-        setUsernameChecking(false);
-      }
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [username]);
 
   // Handle workspace name changes to generate slug
   useEffect(() => {
@@ -125,7 +66,7 @@ export default function OnboardingPage() {
 
   const handleNextStep = () => {
     if (step === 1) {
-      if (!fullName || !username || !usernameValid) return;
+      if (!fullName) return;
     }
     if (step === 2) {
       if (!creatorType || selectedPlatforms.length === 0) return;
@@ -187,7 +128,6 @@ export default function OnboardingPage() {
         .from('users')
         .update({
           full_name: fullName,
-          username: username.toLowerCase(),
           onboarding_completed: true,
           bio: `Creator type: ${creatorType}. Goals: ${goals}`,
         })
@@ -280,39 +220,11 @@ export default function OnboardingPage() {
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-semibold text-[#9ca3af]">Pick a username</label>
-                    {username && (
-                      <span className="text-[10px] font-medium leading-none">
-                        {usernameChecking ? (
-                          <span className="text-gray-500">Checking...</span>
-                        ) : usernameValid === true ? (
-                          <span className="text-green-400 flex items-center gap-1"><Check className="w-3 h-3" /> Available</span>
-                        ) : usernameValid === false ? (
-                          <span className="text-red-400">{usernameErrorText || 'Unavailable'}</span>
-                        ) : null}
-                      </span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-4 top-3.5 text-sm text-[#6b7280]">@</span>
-                    <input
-                      type="text"
-                      required
-                      suppressHydrationWarning={true}
-                      placeholder="sarah_creator"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_.-]/g, ''))}
-                      className="w-full pl-8 pr-4 py-3 bg-[#0d0d20] border border-[rgba(124,58,237,0.15)] rounded-xl text-sm outline-none text-white focus:border-[#7c3aed] focus:ring-2 focus:ring-[#7c3aed]/20 transition-all placeholder:text-[#6b7280]"
-                    />
-                  </div>
-                </div>
               </div>
 
               <button
                 onClick={handleNextStep}
-                disabled={!fullName || !username || !usernameValid || usernameChecking}
+                disabled={!fullName}
                 className="btn-primary w-full text-xs font-semibold py-3 flex.items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Continue Onboarding
