@@ -77,37 +77,25 @@ export default function OnboardingPage() {
   };
 
   const handleSubmit = async () => {
-    if (!user || !workspaceName) {
-      setError('Please enter a workspace name.');
-      return;
-    }
-    const finalSlug = workspaceSlug || workspaceName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || 'workspace';
-
-    setLoading(true);
     setError(null);
-
-    try {
-      await supabase.from('users').upsert({
-        id: user.id,
-        full_name: fullName || user.user_metadata?.full_name || '',
-        email: user.email || '',
-        onboarding_completed: true,
-      }, { onConflict: 'id' });
-
-      await supabase.from('workspaces').upsert({
-        owner_id: user.id,
-        workspace_name: workspaceName,
-        workspace_slug: finalSlug,
-      }, { onConflict: 'workspace_slug' });
-
-      await refreshProfile();
-      await refreshWorkspaces();
-      router.push('/dashboard');
-      router.refresh();
-    } catch (err: any) {
-      console.error(err);
-      router.push('/dashboard');
+    const id = user?.id;
+    if (id) {
+      const slug = workspaceSlug || (workspaceName || 'workspace').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || 'workspace';
+      try {
+        await supabase.from('users').upsert({
+          id, full_name: fullName || '', email: user.email || '', onboarding_completed: true,
+        }, { onConflict: 'id' });
+        if (workspaceName) {
+          await supabase.from('workspaces').upsert({
+            owner_id: id, workspace_name: workspaceName, workspace_slug: slug,
+          }, { onConflict: 'workspace_slug' });
+        }
+        await refreshProfile();
+        await refreshWorkspaces();
+      } catch (_) {}
     }
+    router.push('/dashboard');
+    router.refresh();
   };
 
   return (
