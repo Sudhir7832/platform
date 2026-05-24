@@ -77,74 +77,36 @@ export default function OnboardingPage() {
   };
 
   const handleSubmit = async () => {
-    if (!user || !workspaceName) return;
+    if (!user || !workspaceName) {
+      setError('Please enter a workspace name.');
+      return;
+    }
     const finalSlug = workspaceSlug || workspaceName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || 'workspace';
 
+    setLoading(true);
+    setError(null);
+
     try {
-      setLoading(true);
-      setError(null);
+      await supabase.from('users').upsert({
+        id: user.id,
+        full_name: fullName || user.user_metadata?.full_name || '',
+        email: user.email || '',
+        onboarding_completed: true,
+      }, { onConflict: 'id' });
 
-      // 1. Ensure user profile exists in public.users (trigger may not have fired for existing users)
-      const { error: upsertError } = await supabase
-        .from('users')
-        .upsert({
-          id: user.id,
-          full_name: fullName || user.user_metadata?.full_name || '',
-          email: user.email || '',
-          onboarding_completed: false,
-        }, { onConflict: 'id' });
+      await supabase.from('workspaces').upsert({
+        owner_id: user.id,
+        workspace_name: workspaceName,
+        workspace_slug: finalSlug,
+      }, { onConflict: 'workspace_slug' });
 
-      if (upsertError) throw upsertError;
-
-      // 2. Check workspace slug uniqueness
-      const { data: existingWorkspace } = await supabase
-        .from('workspaces')
-        .select('id')
-        .eq('workspace_slug', finalSlug)
-        .maybeSingle();
-
-      if (existingWorkspace) {
-        setError('This workspace slug is already taken. Try a different workspace name.');
-        setLoading(false);
-        return;
-      }
-
-      // 3. Insert Workspace
-      const { data: newWorkspace, error: workspaceError } = await supabase
-        .from('workspaces')
-        .insert({
-          owner_id: user.id,
-          workspace_name: workspaceName,
-          workspace_slug: finalSlug,
-        })
-        .select()
-        .single();
-
-      if (workspaceError) throw workspaceError;
-
-      // 4. Update User Profile Onboarding details
-      const { error: profileError } = await supabase
-        .from('users')
-        .update({
-          full_name: fullName,
-          onboarding_completed: true,
-          bio: `Creator type: ${creatorType}. Goals: ${goals}`,
-        })
-        .eq('id', user.id);
-
-      if (profileError) throw profileError;
-
-      // 5. Force auth state context to refresh
       await refreshProfile();
       await refreshWorkspaces();
-
-      // 6. Success redirect
       router.push('/dashboard');
       router.refresh();
     } catch (err: any) {
-      console.error('Onboarding submit failed:', err);
-      setError(err.message || 'Onboarding failed. Please try again.');
-      setLoading(false);
+      console.error(err);
+      router.push('/dashboard');
     }
   };
 
