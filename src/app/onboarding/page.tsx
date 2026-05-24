@@ -103,7 +103,7 @@ export default function OnboardingPage() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [username, supabase]);
+  }, [username]);
 
   // Handle workspace name changes to generate slug
   useEffect(() => {
