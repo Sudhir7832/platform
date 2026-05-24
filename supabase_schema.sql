@@ -107,7 +107,50 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ==========================================
--- 3. ROW LEVEL SECURITY (RLS) POLICIES
+-- 3. HELPER FUNCTION (bypasses RLS to prevent infinite recursion)
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION public.is_workspace_member(ws_id UUID, uid UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM public.workspace_members
+        WHERE workspace_id = ws_id AND user_id = uid
+    );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_workspace_admin(ws_id UUID, uid UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM public.workspace_members
+        WHERE workspace_id = ws_id AND user_id = uid AND role IN ('owner', 'admin')
+    );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_workspace_editor(ws_id UUID, uid UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM public.workspace_members
+        WHERE workspace_id = ws_id AND user_id = uid AND role IN ('owner', 'admin', 'editor')
+    );
+END;
+$$;
+
+-- ==========================================
+-- 4. ROW LEVEL SECURITY (RLS) POLICIES
 -- ==========================================
 
 -- Enable Row Level Security for all public tables
@@ -138,13 +181,7 @@ CREATE POLICY "Users can insert their own profile"
 DROP POLICY IF EXISTS "Users can view workspaces they are members of" ON public.workspaces;
 CREATE POLICY "Users can view workspaces they are members of"
     ON public.workspaces FOR SELECT
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.workspace_members
-            WHERE workspace_members.workspace_id = workspaces.id
-            AND workspace_members.user_id = auth.uid()
-        )
-    );
+    USING (public.is_workspace_member(id, auth.uid()));
 
 DROP POLICY IF EXISTS "Users can create workspaces" ON public.workspaces;
 CREATE POLICY "Users can create workspaces"
@@ -161,37 +198,17 @@ CREATE POLICY "Workspace owners can delete their workspaces"
     ON public.workspaces FOR DELETE
     USING (auth.uid() = owner_id);
 
--- 3c. public.workspace_members Policies
+-- 4c. public.workspace_members Policies
 DROP POLICY IF EXISTS "Workspace members can view all workspace membership listings" ON public.workspace_members;
 CREATE POLICY "Workspace members can view all workspace membership listings"
     ON public.workspace_members FOR SELECT
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.workspace_members AS current_members
-            WHERE current_members.workspace_id = workspace_members.workspace_id
-            AND current_members.user_id = auth.uid()
-        )
-    );
+    USING (public.is_workspace_member(workspace_id, auth.uid()));
 
 DROP POLICY IF EXISTS "Workspace owners or admins can manage workspace members" ON public.workspace_members;
 CREATE POLICY "Workspace owners or admins can manage workspace members"
     ON public.workspace_members FOR ALL
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.workspace_members AS current_members
-            WHERE current_members.workspace_id = workspace_members.workspace_id
-            AND current_members.user_id = auth.uid()
-            AND current_members.role IN ('owner', 'admin')
-        )
-    )
-    WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM public.workspace_members AS current_members
-            WHERE current_members.workspace_id = workspace_members.workspace_id
-            AND current_members.user_id = auth.uid()
-            AND current_members.role IN ('owner', 'admin')
-        )
-    );
+    USING (public.is_workspace_admin(workspace_id, auth.uid()))
+    WITH CHECK (public.is_workspace_admin(workspace_id, auth.uid()));
 
 -- Automatically add owner as workspace member on workspace insert
 CREATE OR REPLACE FUNCTION public.handle_new_workspace()
@@ -207,76 +224,48 @@ CREATE OR REPLACE TRIGGER on_workspace_created
     AFTER INSERT ON public.workspaces
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_workspace();
 
--- 3d. public.social_accounts Policies
+-- 4d. public.social_accounts Policies
 DROP POLICY IF EXISTS "Users can manage their own social accounts" ON public.social_accounts;
 CREATE POLICY "Users can manage their own social accounts"
     ON public.social_accounts FOR ALL
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
--- 3e. public.posts Policies
+-- 4e. public.posts Policies
 DROP POLICY IF EXISTS "Workspace members can view posts in their workspace" ON public.posts;
 CREATE POLICY "Workspace members can view posts in their workspace"
     ON public.posts FOR SELECT
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.workspace_members
-            WHERE workspace_members.workspace_id = posts.workspace_id
-            AND workspace_members.user_id = auth.uid()
-        )
-    );
+    USING (public.is_workspace_member(workspace_id, auth.uid()));
 
 DROP POLICY IF EXISTS "Workspace members (except viewers) can create posts" ON public.posts;
 CREATE POLICY "Workspace members (except viewers) can create posts"
     ON public.posts FOR INSERT
-    WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM public.workspace_members
-            WHERE workspace_members.workspace_id = posts.workspace_id
-            AND workspace_members.user_id = auth.uid()
-            AND workspace_members.role IN ('owner', 'admin', 'editor')
-        )
-    );
+    WITH CHECK (public.is_workspace_editor(workspace_id, auth.uid()));
 
 DROP POLICY IF EXISTS "Workspace members (except viewers) can update posts" ON public.posts;
 CREATE POLICY "Workspace members (except viewers) can update posts"
     ON public.posts FOR UPDATE
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.workspace_members
-            WHERE workspace_members.workspace_id = posts.workspace_id
-            AND workspace_members.user_id = auth.uid()
-            AND workspace_members.role IN ('owner', 'admin', 'editor')
-        )
-    );
+    USING (public.is_workspace_editor(workspace_id, auth.uid()));
 
 DROP POLICY IF EXISTS "Workspace members (except viewers) can delete posts" ON public.posts;
 CREATE POLICY "Workspace members (except viewers) can delete posts"
     ON public.posts FOR DELETE
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.workspace_members
-            WHERE workspace_members.workspace_id = posts.workspace_id
-            AND workspace_members.user_id = auth.uid()
-            AND workspace_members.role IN ('owner', 'admin', 'editor')
-        )
-    );
+    USING (public.is_workspace_editor(workspace_id, auth.uid()));
 
--- 3f. public.analytics Policies
+-- 4f. public.analytics Policies
 DROP POLICY IF EXISTS "Workspace members can view analytics for posts in their workspace" ON public.analytics;
 CREATE POLICY "Workspace members can view analytics for posts in their workspace"
     ON public.analytics FOR SELECT
     USING (
         EXISTS (
             SELECT 1 FROM public.posts
-            JOIN public.workspace_members ON workspace_members.workspace_id = posts.workspace_id
             WHERE posts.id = analytics.post_id
-            AND workspace_members.user_id = auth.uid()
+            AND public.is_workspace_member(posts.workspace_id, auth.uid())
         )
     );
 
 -- ==========================================
--- 4. STORAGE BUCKETS CONFIGURATION
+-- 5. STORAGE BUCKETS CONFIGURATION
 -- ==========================================
 -- Create bucket definitions (avatars, logos, posts-media)
 -- Note: Buckets can also be created manually via Supabase Console.
