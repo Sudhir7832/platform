@@ -52,36 +52,10 @@ export async function updateSession(request: NextRequest) {
     url.searchParams.set('next', nextUrl.pathname);
     return NextResponse.redirect(url);
   }
-  if (user) {
-    let onboardingCompleted = false;
-    try {
-      const { data: profile } = await supabase
-        .from('users')
-        .select('onboarding_completed')
-        .eq('id', user.id)
-        .maybeSingle();
-      onboardingCompleted = profile?.onboarding_completed || false;
-    } catch (err) {
-      console.warn('Error reading user profile from Supabase in middleware:', err);
-    }
-
-    if (!onboardingCompleted && !isOnboardingPath && isDashboardPath) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/onboarding';
-      return NextResponse.redirect(url);
-    }
-
-    if (onboardingCompleted && isOnboardingPath) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/dashboard';
-      return NextResponse.redirect(url);
-    }
-
-    if (isAuthPath) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/dashboard';
-      return NextResponse.redirect(url);
-    }
+  if (user && isAuthPath) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/dashboard';
+    return NextResponse.redirect(url);
   }
   return supabaseResponse;
 }

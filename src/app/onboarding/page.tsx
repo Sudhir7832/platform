@@ -77,23 +77,6 @@ export default function OnboardingPage() {
   };
 
   const handleSubmit = async () => {
-    setError(null);
-    const id = user?.id;
-    if (id) {
-      const slug = workspaceSlug || (workspaceName || 'workspace').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || 'workspace';
-      try {
-        await supabase.from('users').upsert({
-          id, full_name: fullName || '', email: user.email || '', onboarding_completed: true,
-        }, { onConflict: 'id' });
-        if (workspaceName) {
-          await supabase.from('workspaces').upsert({
-            owner_id: id, workspace_name: workspaceName, workspace_slug: slug,
-          }, { onConflict: 'workspace_slug' });
-        }
-        await refreshProfile();
-        await refreshWorkspaces();
-      } catch (_) {}
-    }
     router.push('/dashboard');
     router.refresh();
   };
