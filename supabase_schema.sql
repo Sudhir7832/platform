@@ -9,7 +9,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ==========================================
 
 -- Users Table (linked to auth.users)
-CREATE TABLE public.users (
+CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name TEXT,
     username TEXT UNIQUE,
@@ -23,7 +23,7 @@ CREATE TABLE public.users (
 );
 
 -- Workspaces Table
-CREATE TABLE public.workspaces (
+CREATE TABLE IF NOT EXISTS public.workspaces (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
     workspace_name TEXT NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE public.workspaces (
 );
 
 -- Workspace Members Table
-CREATE TABLE public.workspace_members (
+CREATE TABLE IF NOT EXISTS public.workspace_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID REFERENCES public.workspaces(id) ON DELETE CASCADE NOT NULL,
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
@@ -43,7 +43,7 @@ CREATE TABLE public.workspace_members (
 );
 
 -- Social Accounts Table
-CREATE TABLE public.social_accounts (
+CREATE TABLE IF NOT EXISTS public.social_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
     platform TEXT NOT NULL CHECK (platform IN ('instagram', 'twitter', 'facebook', 'linkedin', 'tiktok', 'pinterest', 'threads', 'telegram', 'youtube')),
@@ -56,7 +56,7 @@ CREATE TABLE public.social_accounts (
 );
 
 -- Posts Table
-CREATE TABLE public.posts (
+CREATE TABLE IF NOT EXISTS public.posts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
     workspace_id UUID REFERENCES public.workspaces(id) ON DELETE CASCADE NOT NULL,
@@ -69,7 +69,7 @@ CREATE TABLE public.posts (
 );
 
 -- Analytics Table
-CREATE TABLE public.analytics (
+CREATE TABLE IF NOT EXISTS public.analytics (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE NOT NULL,
     impressions INTEGER DEFAULT 0 NOT NULL,
@@ -119,15 +119,18 @@ ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.analytics ENABLE ROW LEVEL SECURITY;
 
 -- 3a. public.users Policies
+DROP POLICY IF EXISTS "Users can view all user profiles" ON public.users;
 CREATE POLICY "Users can view all user profiles"
     ON public.users FOR SELECT
     USING (true);
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
 CREATE POLICY "Users can update their own profile"
     ON public.users FOR UPDATE
     USING (auth.uid() = id);
 
 -- 3b. public.workspaces Policies
+DROP POLICY IF EXISTS "Users can view workspaces they are members of" ON public.workspaces;
 CREATE POLICY "Users can view workspaces they are members of"
     ON public.workspaces FOR SELECT
     USING (
@@ -138,19 +141,23 @@ CREATE POLICY "Users can view workspaces they are members of"
         )
     );
 
+DROP POLICY IF EXISTS "Users can create workspaces" ON public.workspaces;
 CREATE POLICY "Users can create workspaces"
     ON public.workspaces FOR INSERT
     WITH CHECK (auth.uid() = owner_id);
 
+DROP POLICY IF EXISTS "Workspace owners can update their workspaces" ON public.workspaces;
 CREATE POLICY "Workspace owners can update their workspaces"
     ON public.workspaces FOR UPDATE
     USING (auth.uid() = owner_id);
 
+DROP POLICY IF EXISTS "Workspace owners can delete their workspaces" ON public.workspaces;
 CREATE POLICY "Workspace owners can delete their workspaces"
     ON public.workspaces FOR DELETE
     USING (auth.uid() = owner_id);
 
 -- 3c. public.workspace_members Policies
+DROP POLICY IF EXISTS "Workspace members can view all workspace membership listings" ON public.workspace_members;
 CREATE POLICY "Workspace members can view all workspace membership listings"
     ON public.workspace_members FOR SELECT
     USING (
@@ -161,6 +168,7 @@ CREATE POLICY "Workspace members can view all workspace membership listings"
         )
     );
 
+DROP POLICY IF EXISTS "Workspace owners or admins can manage workspace members" ON public.workspace_members;
 CREATE POLICY "Workspace owners or admins can manage workspace members"
     ON public.workspace_members FOR ALL
     USING (
@@ -195,12 +203,14 @@ CREATE OR REPLACE TRIGGER on_workspace_created
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_workspace();
 
 -- 3d. public.social_accounts Policies
+DROP POLICY IF EXISTS "Users can manage their own social accounts" ON public.social_accounts;
 CREATE POLICY "Users can manage their own social accounts"
     ON public.social_accounts FOR ALL
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
 -- 3e. public.posts Policies
+DROP POLICY IF EXISTS "Workspace members can view posts in their workspace" ON public.posts;
 CREATE POLICY "Workspace members can view posts in their workspace"
     ON public.posts FOR SELECT
     USING (
@@ -211,6 +221,7 @@ CREATE POLICY "Workspace members can view posts in their workspace"
         )
     );
 
+DROP POLICY IF EXISTS "Workspace members (except viewers) can create posts" ON public.posts;
 CREATE POLICY "Workspace members (except viewers) can create posts"
     ON public.posts FOR INSERT
     WITH CHECK (
@@ -222,6 +233,7 @@ CREATE POLICY "Workspace members (except viewers) can create posts"
         )
     );
 
+DROP POLICY IF EXISTS "Workspace members (except viewers) can update posts" ON public.posts;
 CREATE POLICY "Workspace members (except viewers) can update posts"
     ON public.posts FOR UPDATE
     USING (
@@ -233,6 +245,7 @@ CREATE POLICY "Workspace members (except viewers) can update posts"
         )
     );
 
+DROP POLICY IF EXISTS "Workspace members (except viewers) can delete posts" ON public.posts;
 CREATE POLICY "Workspace members (except viewers) can delete posts"
     ON public.posts FOR DELETE
     USING (
@@ -245,6 +258,7 @@ CREATE POLICY "Workspace members (except viewers) can delete posts"
     );
 
 -- 3f. public.analytics Policies
+DROP POLICY IF EXISTS "Workspace members can view analytics for posts in their workspace" ON public.analytics;
 CREATE POLICY "Workspace members can view analytics for posts in their workspace"
     ON public.analytics FOR SELECT
     USING (

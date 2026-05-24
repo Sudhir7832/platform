@@ -40,16 +40,6 @@ function LoginContent() {
     }
   };
 
-  const handleLaunchDemoMode = () => {
-    // Set cookies to trigger mock database-less auth
-    document.cookie = "pulsesync_mock_user=true; path=/; max-age=31536000; SameSite=Lax";
-    document.cookie = "pulsesync_sandbox_onboarding=true; path=/; max-age=31536000; SameSite=Lax";
-    
-    // Redirect to dashboard
-    router.push(nextRoute);
-    router.refresh();
-  };
-
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
@@ -69,9 +59,9 @@ function LoginContent() {
       router.push(nextRoute);
       router.refresh();
     } catch (err: any) {
-      console.warn('Password login failed, proposing sandbox mode fallback:', err);
+      console.warn('Password login failed:', err);
       setError(
-        `${err.message || 'Invalid email or password'}. If your Supabase database is not configured yet, you can use Demo/Sandbox Mode below.`
+        err.message || 'Invalid email or password'
       );
     } finally {
       setLoading(false);
@@ -98,9 +88,9 @@ function LoginContent() {
 
       setMessage('Magic Link sent! Please check your email inbox.');
     } catch (err: any) {
-      console.warn('Magic link login failed, proposing sandbox mode fallback:', err);
+      console.warn('Magic link login failed:', err);
       setError(
-        `${err.message || 'Failed to send Magic Link'}. If your Supabase database is not configured yet, you can use Demo/Sandbox Mode below.`
+        err.message || 'Failed to send Magic Link'
       );
     } finally {
       setLoading(false);
@@ -387,23 +377,6 @@ function LoginContent() {
             )}
           </AnimatePresence>
 
-          <div className="relative flex items-center justify-center my-2">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-[rgba(124,58,237,0.1)]" />
-            </div>
-            <span className="relative px-3 text-[10px] uppercase font-semibold text-[#6b7280] bg-[#050510]">
-              Or try locally
-            </span>
-          </div>
-
-          <button
-            onClick={handleLaunchDemoMode}
-            type="button"
-            className="w-full py-3 px-4 rounded-xl border border-[rgba(124,58,237,0.3)] bg-gradient-to-r from-[#7c3aed]/10 to-[#3b82f6]/10 text-xs font-semibold text-[#a78bfa] hover:text-white hover:border-[#7c3aed] hover:from-[#7c3aed]/20 hover:to-[#3b82f6]/20 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(124,58,237,0.05)]"
-          >
-            <Sparkles className="w-4 h-4 text-[#a78bfa] animate-pulse" />
-            Try in Demo / Sandbox Mode
-          </button>
         </motion.div>
       </div>
     </div>

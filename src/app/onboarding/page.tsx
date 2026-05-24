@@ -195,22 +195,13 @@ export default function OnboardingPage() {
       const isSchemaError = err.message?.includes('schema cache') || err.message?.includes('relation') || err.message?.includes('not found');
       if (isSchemaError) {
         setError(
-          'Supabase SQL schema table not found. Please ensure you have run the supabase_schema.sql script in your Supabase SQL Editor. Alternatively, you can bypass this step and proceed in Sandbox/Offline Mode.'
+          'Supabase SQL schema table not found. Please ensure you have run the supabase_schema.sql script in your Supabase SQL Editor.'
         );
       } else {
         setError(err.message || 'Onboarding failed. Please try again.');
       }
       setLoading(false);
     }
-  };
-
-  const handleSandboxLaunch = () => {
-    // Set sandbox cookie for the server-side middleware
-    document.cookie = "pulsesync_sandbox_onboarding=true; path=/; max-age=31536000; SameSite=Lax";
-    
-    // Redirect to dashboard
-    router.push('/dashboard');
-    router.refresh();
   };
 
   return (
@@ -266,13 +257,7 @@ export default function OnboardingPage() {
                     <h1 className="text-3xl font-extrabold text-white tracking-tight">Create your identity</h1>
                     <p className="text-sm text-[#9ca3af]">Let&apos;s build your custom public profile credentials.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleSandboxLaunch}
-                    className="text-[10px] font-semibold text-[#a78bfa] hover:text-[#7c3aed] bg-[rgba(124,58,237,0.06)] hover:bg-[rgba(124,58,237,0.12)] border border-[rgba(124,58,237,0.15)] px-2.5 py-1.5 rounded-lg transition-all cursor-pointer"
-                  >
-                    Skip to Sandbox Mode
-                  </button>
+
                 </div>
               </div>
 
@@ -437,16 +422,9 @@ export default function OnboardingPage() {
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="flex flex-col gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs"
+                    className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs"
                   >
                     <span className="leading-normal">{error}</span>
-                    <button
-                      type="button"
-                      onClick={handleSandboxLaunch}
-                      className="self-start px-3.5 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-white font-semibold transition-all cursor-pointer border border-red-500/30"
-                    >
-                      Bypass & Launch in Sandbox Mode
-                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>

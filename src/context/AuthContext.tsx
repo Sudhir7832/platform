@@ -97,33 +97,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (profileError) throw profileError;
         profileData = data;
       } catch (err) {
-        console.warn('Error fetching user profile, checking sandbox mode:', err);
+        console.warn('Error fetching user profile:', err);
       }
-
-      const isSandbox = typeof window !== 'undefined' && (document.cookie.includes('pulsesync_sandbox_onboarding=true') || document.cookie.includes('pulsesync_mock_user=true'));
 
       if (profileData) {
         setProfile(profileData);
-      } else if (isSandbox) {
-        const localProfile = typeof window !== 'undefined' ? localStorage.getItem(`pulsesync_profile_${userId}`) : null;
-        if (localProfile) {
-          setProfile(JSON.parse(localProfile));
-        } else {
-          // Mock a user profile for testing
-          const mockProfile: UserProfile = {
-            id: userId,
-            full_name: rawFullName || 'Demo Creator',
-            username: 'demo_creator',
-            email: email || 'demo@pulsesync.com',
-            avatar_url: '',
-            bio: 'Active in sandbox/demo mode. Connect social accounts and schedule posts locally.',
-            website: 'https://pulsesync.com',
-            plan_type: 'free',
-            onboarding_completed: true,
-            created_at: new Date().toISOString()
-          };
-          setProfile(mockProfile);
-        }
       }
 
       // 2. Fetch user's workspaces
@@ -155,31 +133,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }));
         }
       } catch (err) {
-        console.warn('Error fetching workspace memberships, checking sandbox mode:', err);
+        console.warn('Error fetching workspace memberships:', err);
       }
 
       if (userWorkspaces.length > 0) {
         setWorkspaces(userWorkspaces);
-      } else if (isSandbox) {
-        const localWorkspace = typeof window !== 'undefined' ? localStorage.getItem(`pulsesync_workspace_${userId}`) : null;
-        if (localWorkspace) {
-          const parsed = JSON.parse(localWorkspace);
-          userWorkspaces = [parsed];
-          setWorkspaces(userWorkspaces);
-        } else {
-          // Mock a workspace for sandbox testing
-          const mockWorkspace: Workspace = {
-            id: 'sandbox-workspace-id',
-            owner_id: userId,
-            workspace_name: 'Demo Workspace',
-            workspace_slug: 'demo',
-            logo: null,
-            created_at: new Date().toISOString(),
-            role: 'owner'
-          };
-          userWorkspaces = [mockWorkspace];
-          setWorkspaces(userWorkspaces);
-        }
       }
 
       // Set active workspace
@@ -282,8 +240,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // 2. Instantly and synchronously clear all local storage tokens and cookies
       if (typeof window !== 'undefined') {
-        document.cookie = 'pulsesync_sandbox_onboarding=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
-        document.cookie = 'pulsesync_mock_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
         localStorage.removeItem('active_workspace_id');
         Object.keys(localStorage).forEach((key) => {
           if (key.startsWith('sb-') || key.startsWith('pulsesync_')) {
@@ -487,9 +443,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let targetWorkspaceId = activeWorkspace?.id || (workspaces.length > 0 ? workspaces[0].id : null);
 
-    // Auto-provision a default workspace if the user is logged in but has no SQL workspace registered,
-    // thereby satisfying database Foreign Key constraints (NOT NULL / REFERENCES public.workspaces).
-    if (!targetWorkspaceId || targetWorkspaceId === 'sandbox-workspace-id') {
+    if (!targetWorkspaceId) {
       try {
         const { data: newWS, error: wsError } = await supabase
           .from('workspaces')
@@ -530,9 +484,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
     };
 
-    const isSandbox = user.id === 'mock-user-id' || typeof window !== 'undefined' && (document.cookie.includes('pulsesync_sandbox_onboarding=true') || document.cookie.includes('pulsesync_mock_user=true'));
-
-    if (!isSandbox && !scheduledAt && platforms.includes('twitter')) {
+    if (!scheduledAt && platforms.includes('twitter')) {
       try {
         const res = await fetch('/api/post/twitter', {
           method: 'POST',
@@ -555,7 +507,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .from('posts')
             .insert({
               user_id: user.id,
-              workspace_id: targetWorkspaceId || 'sandbox-workspace-id',
+              workspace_id: targetWorkspaceId,
               content,
               platforms,
               media_urls: mediaFiles || [],
@@ -574,7 +526,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('posts')
         .insert({
           user_id: user.id,
-          workspace_id: targetWorkspaceId || 'sandbox-workspace-id',
+          workspace_id: targetWorkspaceId,
           content,
           platforms,
           media_urls: mediaFiles || [],
@@ -627,26 +579,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             session.user.user_metadata?.full_name || session.user.user_metadata?.name
           );
         } else {
-          // Check if mock user cookie is set
-          const isMock = typeof window !== 'undefined' && document.cookie.includes('pulsesync_mock_user=true');
-          if (isMock) {
-            const mockUser = {
-              id: 'mock-user-id',
-              email: 'demo@pulsesync.com',
-              user_metadata: { full_name: 'Demo Creator' }
-            } as any;
-            setUser(mockUser);
-            await fetchProfileAndWorkspaces(
-              mockUser.id,
-              mockUser.email,
-              mockUser.user_metadata.full_name
-            );
-          } else {
-            setUser(null);
-            setProfile(null);
-            setWorkspaces([]);
-            setActiveWorkspace(null);
-          }
+          setUser(null);
+          setProfile(null);
+          setWorkspaces([]);
+          setActiveWorkspace(null);
         }
       } catch (err) {
         console.error('Error initializing auth state:', err);
@@ -662,12 +598,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       
-      // If logging out, reset loading to true to show transition and wipe caches
       if (event === 'SIGNED_OUT') {
         setLoading(true);
         if (typeof window !== 'undefined') {
-          document.cookie = 'pulsesync_sandbox_onboarding=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
-          document.cookie = 'pulsesync_mock_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
           localStorage.removeItem('active_workspace_id');
           Object.keys(localStorage).forEach((key) => {
             if (key.startsWith('sb-') || key.startsWith('pulsesync_')) {
