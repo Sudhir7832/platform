@@ -46,15 +46,13 @@ export default function OnboardingPage() {
 
 
 
-  // Handle workspace name changes to generate slug
   useEffect(() => {
     if (workspaceName) {
-      setWorkspaceSlug(
-        workspaceName
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/(^-|-$)+/g, '')
-      );
+      const slug = workspaceName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)+/g, '');
+      setWorkspaceSlug(slug || 'workspace');
     }
   }, [workspaceName]);
 
@@ -225,7 +223,7 @@ export default function OnboardingPage() {
               <button
                 onClick={handleNextStep}
                 disabled={!fullName}
-                className="btn-primary w-full text-xs font-semibold py-3 flex.items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-primary w-full text-xs font-semibold py-3 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Continue Onboarding
                 <ArrowRight className="w-4 h-4" />
