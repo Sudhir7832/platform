@@ -144,7 +144,19 @@ export default function OnboardingPage() {
       setLoading(true);
       setError(null);
 
-      // 1. Check workspace slug uniqueness
+      // 1. Ensure user profile exists in public.users (trigger may not have fired for existing users)
+      const { error: upsertError } = await supabase
+        .from('users')
+        .upsert({
+          id: user.id,
+          full_name: fullName || user.user_metadata?.full_name || '',
+          email: user.email || '',
+          onboarding_completed: false,
+        }, { onConflict: 'id' });
+
+      if (upsertError) throw upsertError;
+
+      // 2. Check workspace slug uniqueness
       const { data: existingWorkspace } = await supabase
         .from('workspaces')
         .select('id')
@@ -157,7 +169,7 @@ export default function OnboardingPage() {
         return;
       }
 
-      // 2. Insert Workspace (Database trigger will automatically create active workspace membership as owner)
+      // 3. Insert Workspace
       const { data: newWorkspace, error: workspaceError } = await supabase
         .from('workspaces')
         .insert({
@@ -170,7 +182,7 @@ export default function OnboardingPage() {
 
       if (workspaceError) throw workspaceError;
 
-      // 3. Update User Profile Onboarding details
+      // 4. Update User Profile Onboarding details
       const { error: profileError } = await supabase
         .from('users')
         .update({
@@ -183,23 +195,16 @@ export default function OnboardingPage() {
 
       if (profileError) throw profileError;
 
-      // 4. Force auth state context to refresh
+      // 5. Force auth state context to refresh
       await refreshProfile();
       await refreshWorkspaces();
 
-      // 5. Success redirect
+      // 6. Success redirect
       router.push('/dashboard');
       router.refresh();
     } catch (err: any) {
       console.error('Onboarding submit failed:', err);
-      const isSchemaError = err.message?.includes('schema cache') || err.message?.includes('relation') || err.message?.includes('not found');
-      if (isSchemaError) {
-        setError(
-          'Supabase SQL schema table not found. Please ensure you have run the supabase_schema.sql script in your Supabase SQL Editor.'
-        );
-      } else {
-        setError(err.message || 'Onboarding failed. Please try again.');
-      }
+      setError(err.message || 'Onboarding failed. Please try again.');
       setLoading(false);
     }
   };
